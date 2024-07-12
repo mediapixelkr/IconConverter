@@ -1,4 +1,4 @@
-# IconConverter
+# IconConverter 2024
 
 A C# Application to convert image files to .ico and creating multi-sized icons.
 
