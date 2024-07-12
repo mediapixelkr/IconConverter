@@ -1,21 +1,23 @@
-﻿using ImageMagick;
+﻿using IconConverter.IconEx;
+using ImageMagick;
 using System;
 using System.Drawing;
+using System.Drawing.Imaging;
 using System.IO;
-using IconConverter.IconEx;
 using System.Windows;
 
-namespace IconConverter {
-    public static class ImageOperations {
+namespace IconConverter
+{
+    public static class ImageOperations
+    {
 
-        enum Direction {
+        enum Direction
+        {
             NE, SE, SW, NW
         }
 
-        /// <summary>
-        /// Gets the direction of the rectangle from the origin.
-        /// </summary>
-        private static Direction getDirection(System.Windows.Shapes.Rectangle rect) {
+        private static Direction getDirection(System.Windows.Shapes.Rectangle rect)
+        {
             if (rect.VerticalAlignment == VerticalAlignment.Top && rect.HorizontalAlignment == HorizontalAlignment.Left)
                 return Direction.SE;
             if (rect.VerticalAlignment == VerticalAlignment.Top && rect.HorizontalAlignment == HorizontalAlignment.Right)
@@ -26,7 +28,8 @@ namespace IconConverter {
             return Direction.NW;
         }
 
-        internal static void CropAndSave(MagickImage img, string fileName, int dimension, System.Windows.Shapes.Rectangle rect, double scale, System.Windows.Controls.Image pictureBox) {
+        internal static void CropAndSave(MagickImage img, string fileName, int dimension, System.Windows.Shapes.Rectangle rect, double scale, System.Windows.Controls.Image pictureBox)
+        {
             Directory.CreateDirectory(Path.GetFileNameWithoutExtension(fileName));
 
             img = new MagickImage(img);
@@ -36,17 +39,20 @@ namespace IconConverter {
             string iconFilename = Path.Combine(Path.GetFileNameWithoutExtension(fileName), $"CroppedIcon_{dimension}.ico");
 
             img.Scale(new MagickGeometry(dimension) { IgnoreAspectRatio = true });
-            Console.WriteLine(img.HasAlpha + " " + img.BitDepth());
-            if (dimension == 256) {
-                if ((img.Format == MagickFormat.Jpeg || img.Format == MagickFormat.Jpg) && MessageBox.Show("Compact into jpg .ico?", "", MessageBoxButton.YesNo) == MessageBoxResult.Yes) {
+            Console.WriteLine(img.HasAlpha + " " + img.Settings.Depth);
+
+            if (dimension == 256)
+            {
+                if ((img.Format == MagickFormat.Jpeg || img.Format == MagickFormat.Jpg) && MessageBox.Show("Compact into jpg .ico?", "", MessageBoxButton.YesNo) == MessageBoxResult.Yes)
+                {
                     IconFileWriter x = new IconFileWriter();
                     img.HasAlpha = true;
-                    x.Images.Add(img.ToBitmap());
+                    x.Images.Add(ToBitmap(img));
                     x.Save(iconFilename);
-
                     return;
                 }
-                else {
+                else
+                {
                     img.HasAlpha = true;
                 }
             }
@@ -54,60 +60,85 @@ namespace IconConverter {
             img.Write(iconFilename);
         }
 
-        private static void cropImage(MagickImage img, System.Windows.Shapes.Rectangle rect, double scale, System.Windows.Controls.Image pictureBox) {
-            int height = (int)(rect.Height / scale);
+        private static void cropImage(MagickImage img, System.Windows.Shapes.Rectangle rect, double scale, System.Windows.Controls.Image pictureBox)
+        {
             int width = (int)(rect.Width / scale);
+            int height = (int)(rect.Height / scale);
 
-            if (getDirection(rect) == Direction.NE) {
-                int left = (int)(rect.Margin.Left / scale);
-                int top = (int)((pictureBox.Height - (rect.Margin.Bottom + rect.Height)) / scale);
+            int left = 0;
+            int top = 0;
 
-                img.Crop(left, top, height, width);
+            switch (getDirection(rect))
+            {
+                case Direction.NE:
+                    left = (int)(rect.Margin.Left / scale);
+                    top = (int)((pictureBox.Height - (rect.Margin.Bottom + rect.Height)) / scale);
+                    break;
+                case Direction.SE:
+                    left = (int)(rect.Margin.Left / scale);
+                    top = (int)(rect.Margin.Top / scale);
+                    break;
+                case Direction.SW:
+                    left = (int)((pictureBox.Width - rect.Margin.Right - rect.Width) / scale);
+                    top = (int)(rect.Margin.Top / scale);
+                    break;
+                case Direction.NW:
+                    left = (int)((pictureBox.Width - (rect.Margin.Right + rect.Width)) / scale);
+                    top = (int)((pictureBox.Height - (rect.Margin.Bottom + rect.Height)) / scale);
+                    break;
             }
-            if (getDirection(rect) == Direction.SE) {
-                int left = (int)(rect.Margin.Left / scale);
-                int top = (int)((rect.Margin.Top) / scale);
 
-                img.Crop(left, top, height, width);
-            }
-            if (getDirection(rect) == Direction.SW) {
-                int left = (int)((pictureBox.Width - rect.Margin.Right - rect.Width) / scale);
-                int top = (int)((rect.Margin.Top) / scale);
-
-                img.Crop(left, top, height, width);
-            }
-            if (getDirection(rect) == Direction.NW) {
-                int left = (int)((pictureBox.Width - (rect.Margin.Right + rect.Width)) / scale);
-                int top = (int)((pictureBox.Height - (rect.Margin.Bottom + rect.Height)) / scale);
-
-                img.Crop(left, top, height, width);
-            }
+            MagickGeometry geometry = new MagickGeometry(left, top, width, height);
+            img.Crop(geometry);
         }
 
-        internal static void SaveWithoutCrop(string fileName, int dimension) {
+        internal static void SaveWithoutCrop(string fileName, int dimension)
+        {
             Directory.CreateDirectory(Path.GetFileNameWithoutExtension(fileName));
 
             MagickImage img = new MagickImage(fileName);
             img.Scale(new MagickGeometry(dimension) { IgnoreAspectRatio = true });
-            Bitmap bmp = img.ToBitmap();
-            MagickImage final = new MagickImage(bmp);
+            Bitmap bmp = ToBitmap(img);
+            byte[] bmpBytes = BitmapToBytes(bmp);  // Convert Bitmap to byte[]
+            MagickImage final = new MagickImage(bmpBytes);  // Use byte[] to create MagickImage
 
             string iconFilename = Path.Combine(Path.GetFileNameWithoutExtension(fileName), $"WholeIcon_{dimension}.ico");
 
             final.Write(iconFilename);
         }
 
-        internal static IconDeviceImage GetIconBMP(string fileName) {
+        internal static IconDeviceImage GetIconBMP(string fileName)
+        {
             MagickImage ico = new MagickImage(fileName);
             IconDeviceImage IconDeviceImage = new IconDeviceImage(new System.Drawing.Size(ico.Width, ico.Height), System.Windows.Forms.ColorDepth.Depth32Bit);
-            IconDeviceImage.IconImage = ico.ToBitmap();
+            IconDeviceImage.IconImage = ToBitmap(ico);
 
             return IconDeviceImage;
         }
 
-        internal static Image GetIconPNG(string fileName) {
+        internal static Image GetIconPNG(string fileName)
+        {
             MagickImage ico = new MagickImage(fileName);
-            return ico.ToBitmap();
-        }      
+            return ToBitmap(ico);
+        }
+
+        private static Bitmap ToBitmap(MagickImage image)
+        {
+            using (MemoryStream memoryStream = new MemoryStream())
+            {
+                image.Write(memoryStream, MagickFormat.Png);
+                memoryStream.Position = 0;
+                return new Bitmap(memoryStream);
+            }
+        }
+
+        private static byte[] BitmapToBytes(Bitmap bitmap)
+        {
+            using (MemoryStream stream = new MemoryStream())
+            {
+                bitmap.Save(stream, ImageFormat.Png);
+                return stream.ToArray();
+            }
+        }
     }
 }
