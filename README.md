@@ -1,17 +1,29 @@
 # IconConverter 2024
 
-A C# Application to convert image files to .ico and creating multi-sized icons.
+A robust C# WPF Application to convert image files to .ico and create multi-sized icons.
 
-###How to use:
+### How to use:
 
-You can drag and drop files directly to the window or click 'File -> Open' to load an image. To select a region, click and drag on the image, release to finish. Then, you can choose what dimensions you want to convert at the 'Export' menu. To merge multiple .ico, click the 'Merge' menu, choose the preferred option and select the files that you want to merge. After that, specify the location to save the result.
+1.  **Open or Drag & Drop**: You can drag and drop files directly into the window or click `File -> Open` to load an image.
+2.  **Select Region (Optional)**: To crop, click and drag on the image to select a region. Release to finish selection.
+3.  **Choose Dimensions**: Go to the `Export` menu and check the desired icon dimensions (256x256, 128x128, etc.).
+4.  **Save**:
+    *   **Crop and Save**: Click `Export -> Crop and Save` to save the selected region as icons.
+    *   **Save Whole Image**: Click `Export -> Save whole image as icon` to convert the entire image.
+5.  **Merge Icons**: To merge multiple .ico files into a single multi-size icon file, click the `Merge` menu, choose the preferred option, and select the files to merge.
+
+**Output:** Converted icons are saved in a folder named after the source image, located in the same directory as the source image.
 
 <p align="center">
 <img align="center" src="http://i.imgur.com/yCbhyqR.png" width="551"/>
 
-**Note:** It creates a folder at ***%AppData%*** only to store the converted icons, that folder can be deleted after use.
+### Key Features:
 
-###Libraries used:
+*   **Modern & Responsive**: Uses asynchronous processing so the UI never freezes, even with large files.
+*   **High Quality**: Powered by **Magick.NET** (ImageMagick) for superior image resizing and format conversion.
+*   **Robust**: comprehensive error handling ensures the app doesn't crash on file errors.
+*   **Clean UI**: Native WPF controls for a seamless experience.
 
-- [ImageMagick](https://github.com/ImageMagick/ImageMagick)     
-- IconEx
+### Libraries used:
+
+*   [Magick.NET](https://github.com/dlemstra/Magick.NET) (ImageMagick wrapper for .NET)
