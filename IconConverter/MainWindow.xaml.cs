@@ -1,4 +1,3 @@
-﻿using IconConverter.IconEx;
 using ImageMagick;
 using Microsoft.Win32;
 using System;
