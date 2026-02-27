@@ -18,12 +18,12 @@
         <Menu BorderBrush="#0078d7" Background="White" BorderThickness="0,0,0,1" x:Name="menu" HorizontalAlignment="Stretch" Height="20" VerticalAlignment="Top">
             <MenuItem Header="Open File" Click="btn_OpenFile_Click" />
             <MenuItem Header="Export">
-                <local:CCheckBox x:Name="cb256" Margin="-29,0,0,0" Content="256x256" Dimension="256" IsChecked="True"/>
-                <local:CCheckBox x:Name="cb128" Margin="-29,0,0,0" Content="128x128" Dimension="128" />
-                <local:CCheckBox x:Name="cb64" Margin="-29,0,0,0" Content="64x64" Dimension="64" />
-                <local:CCheckBox x:Name="cb48" Margin="-29,0,0,0" Content="48x48" Dimension="48" />
-                <local:CCheckBox x:Name="cb32" Margin="-29,0,0,0" Content="32x32" Dimension="32" />
-                <local:CCheckBox x:Name="cb16" Margin="-29,0,0,0" Content="16x16" Dimension="16" />
+                <MenuItem Header="256x256" Tag="256" IsCheckable="True" IsChecked="True" Checked="Dimension_Checked" Unchecked="Dimension_Unchecked" />
+                <MenuItem Header="128x128" Tag="128" IsCheckable="True" Checked="Dimension_Checked" Unchecked="Dimension_Unchecked" />
+                <MenuItem Header="64x64" Tag="64" IsCheckable="True" Checked="Dimension_Checked" Unchecked="Dimension_Unchecked" />
+                <MenuItem Header="48x48" Tag="48" IsCheckable="True" Checked="Dimension_Checked" Unchecked="Dimension_Unchecked" />
+                <MenuItem Header="32x32" Tag="32" IsCheckable="True" Checked="Dimension_Checked" Unchecked="Dimension_Unchecked" />
+                <MenuItem Header="16x16" Tag="16" IsCheckable="True" Checked="Dimension_Checked" Unchecked="Dimension_Unchecked" />
                 <Separator/>
                 <MenuItem Header="Crop and Save" Click="btn_CropAndSave_Click"/>
                 <MenuItem Header="Save whole image as icon" Click="btn_SaveWithoutCrop_Click"/>
