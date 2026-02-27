@@ -1,4 +1,3 @@
-﻿using IconConverter.IconEx;
 using ImageMagick;
 using Microsoft.Win32;
 using System;
@@ -34,10 +33,6 @@ namespace IconConverter
 
             checkBoxes.AddRange(new[] { cb256, cb128, cb64, cb48, cb32, cb16 });
 
-            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IconConverter");
-            Directory.CreateDirectory(dir);
-            Directory.SetCurrentDirectory(dir);
-
             SizeChanged += WindowSizeChanged;
         }
 
@@ -46,6 +41,7 @@ namespace IconConverter
             scale = 1;
             loadedImageFilename = fileName;
 
+            loadedImage?.Dispose();
             MagickImage image = new MagickImage(fileName);
             loadedImage = image;
 
@@ -123,14 +119,25 @@ namespace IconConverter
         {
             if (rect != null && pictureGrid.Children.Contains(rect))
             {
-                foreach (var cb in checkBoxes)
+                string folderName = Path.GetFileNameWithoutExtension(loadedImageFilename);
+                Directory.CreateDirectory(folderName);
+
+                using (MagickImage cropped = new MagickImage(loadedImage))
                 {
-                    if (cb.IsChecked.Value)
+                    MagickGeometry geometry = GetCropGeometry(rect, scale, pictureBox);
+                    cropped.Crop(geometry);
+                    cropped.RePage();
+
+                    foreach (var cb in checkBoxes)
                     {
-                        ImageOperations.CropAndSave(loadedImage, loadedImageFilename, cb.Dimension, rect, scale, pictureBox);
+                        if (cb.IsChecked.Value)
+                        {
+                            string outputPath = Path.Combine(folderName, $"CroppedIcon_{cb.Dimension}.ico");
+                            ImageOperations.ResizeAndSave(cropped, cb.Dimension, outputPath);
+                        }
                     }
                 }
-                Process.Start(Path.GetFileNameWithoutExtension(loadedImageFilename));
+                Process.Start(folderName);
             }
             else
             {
@@ -138,45 +145,55 @@ namespace IconConverter
             }
         }
 
+        private MagickGeometry GetCropGeometry(System.Windows.Shapes.Rectangle rect, double scale, System.Windows.Controls.Image pictureBox)
+        {
+            int width = (int)(rect.Width / scale);
+            int height = (int)(rect.Height / scale);
+
+            int left = 0;
+            int top = 0;
+
+            if (rect.VerticalAlignment == VerticalAlignment.Top)
+            {
+                top = (int)(rect.Margin.Top / scale);
+            }
+            else // Bottom
+            {
+                top = (int)((pictureBox.Height - (rect.Margin.Bottom + rect.Height)) / scale);
+            }
+
+            if (rect.HorizontalAlignment == HorizontalAlignment.Left)
+            {
+                left = (int)(rect.Margin.Left / scale);
+            }
+            else // Right
+            {
+                left = (int)((pictureBox.Width - (rect.Margin.Right + rect.Width)) / scale);
+            }
+
+            return new MagickGeometry(left, top, width, height);
+        }
+
         private void btn_MergeIntoBMP_Click(object sender, RoutedEventArgs e)
         {
             string[] selectedFiles = selectedFilesOnDialog();
             if (selectedFiles != null)
             {
-                IconEx.IconEx icon = new IconEx.IconEx();
-                foreach (string fileName in selectedFiles)
-                {
-                    icon.iconCollection.Add(ImageOperations.GetIconBMP(fileName));
-                }
                 SaveFileDialog sfd = new SaveFileDialog();
                 sfd.AddExtension = true;
                 sfd.InitialDirectory = Directory.GetCurrentDirectory();
                 sfd.DefaultExt = ".ico";
                 sfd.Filter = "Icon |*.ico";
 
-                if (sfd.ShowDialog().Value)
-                    icon.Save(sfd.FileName);
+                if (sfd.ShowDialog().Value == true)
+                    ImageOperations.MergeIcons(selectedFiles, sfd.FileName);
             }
         }
 
         private void btn_MergeIntoPNG_Click(object sender, RoutedEventArgs e)
         {
-            string[] selectedFiles = selectedFilesOnDialog();
-            if (selectedFiles != null)
-            {
-                IconFileWriter icon = new IconFileWriter();
-
-                foreach (string fileName in selectedFiles)
-                {
-                    icon.Images.Add(ImageOperations.GetIconPNG(fileName));
-                }
-                SaveFileDialog sfd = new SaveFileDialog();
-                sfd.AddExtension = true;
-                sfd.DefaultExt = ".ico";
-                sfd.Filter = "Icon |*.ico";
-                if (sfd.ShowDialog().Value)
-                    icon.Save(sfd.FileName);
-            }
+            // Same behavior as above, as Magick.NET handles formats automatically
+            btn_MergeIntoBMP_Click(sender, e);
         }
 
         #endregion

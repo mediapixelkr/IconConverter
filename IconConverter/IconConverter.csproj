@@ -75,10 +75,6 @@
       <SubType>Code</SubType>
     </Compile>
     <Compile Include="CCheckBox.cs" />
-    <Compile Include="IconEx\AsyncUtils.cs" />
-    <Compile Include="IconEx\GroupIconResources.cs" />
-    <Compile Include="IconEx\IconEx.cs" />
-    <Compile Include="IconEx\IconFileWriter.cs" />
     <Compile Include="ImageOperations.cs" />
     <Compile Include="ImagingHelper.cs" />
     <Compile Include="MainWindow.xaml.cs">
