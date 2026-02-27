@@ -1,4 +1,3 @@
-﻿using IconConverter.IconEx;
 using ImageMagick;
 using Microsoft.Win32;
 using System;
@@ -6,6 +5,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
@@ -20,10 +20,7 @@ namespace IconConverter
     public partial class MainWindow : Window
     {
 
-        /// <summary>
-        /// Custom checkBoxes with a 'Dimesion' property included.
-        /// </summary>
-        List<CCheckBox> checkBoxes = new List<CCheckBox>();
+        List<int> selectedDimensions = new List<int> { 256 };
         MagickImage loadedImage;
         string loadedImageFilename;
         double scale = 1;
@@ -32,47 +29,74 @@ namespace IconConverter
         {
             InitializeComponent();
 
-            checkBoxes.AddRange(new[] { cb256, cb128, cb64, cb48, cb32, cb16 });
-
-            string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "IconConverter");
-            Directory.CreateDirectory(dir);
-            Directory.SetCurrentDirectory(dir);
-
             SizeChanged += WindowSizeChanged;
+        }
+
+        private void Dimension_Checked(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && int.TryParse(menuItem.Tag.ToString(), out int dimension))
+            {
+                if (!selectedDimensions.Contains(dimension))
+                    selectedDimensions.Add(dimension);
+            }
+        }
+
+        private void Dimension_Unchecked(object sender, RoutedEventArgs e)
+        {
+            if (sender is MenuItem menuItem && int.TryParse(menuItem.Tag.ToString(), out int dimension))
+            {
+                selectedDimensions.Remove(dimension);
+            }
         }
 
         void loadImage(string fileName)
         {
-            scale = 1;
-            loadedImageFilename = fileName;
+            try
+            {
+                scale = 1;
+                loadedImageFilename = fileName;
 
-            MagickImage image = new MagickImage(fileName);
-            loadedImage = image;
+                loadedImage?.Dispose();
+                MagickImage image = new MagickImage(fileName);
+                loadedImage = image;
 
-            updateScale();
+                updateScale();
 
-            pictureBox.Source = ToBitmapSource(image);
+                pictureBox.Source = ToBitmapSource(image);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to load image: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
         private BitmapSource ToBitmapSource(MagickImage image)
         {
-            using (MemoryStream memoryStream = new MemoryStream())
+            try
             {
-                // Save the image to the stream as PNG
-                image.Write(memoryStream, MagickFormat.Png);
+                using (MemoryStream memoryStream = new MemoryStream())
+                {
+                    // Save the image to the stream as PNG
+                    image.Write(memoryStream, MagickFormat.Png);
 
-                // Reset the stream position to the beginning
-                memoryStream.Position = 0;
+                    // Reset the stream position to the beginning
+                    memoryStream.Position = 0;
 
-                // Create a BitmapImage
-                BitmapImage bitmapImage = new BitmapImage();
-                bitmapImage.BeginInit();
-                bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
-                bitmapImage.StreamSource = memoryStream;
-                bitmapImage.EndInit();
-                bitmapImage.Freeze(); // Freeze to make it cross-thread accessible
+                    // Create a BitmapImage
+                    BitmapImage bitmapImage = new BitmapImage();
+                    bitmapImage.BeginInit();
+                    bitmapImage.CacheOption = BitmapCacheOption.OnLoad;
+                    bitmapImage.StreamSource = memoryStream;
+                    bitmapImage.EndInit();
+                    bitmapImage.Freeze(); // Freeze to make it cross-thread accessible
 
-                return bitmapImage;
+                    return bitmapImage;
+                }
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to convert image for display: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                return null;
             }
         }
 
@@ -110,27 +134,61 @@ namespace IconConverter
             }
         }
 
-        private void btn_SaveWithoutCrop_Click(object sender, RoutedEventArgs e)
+        private async void btn_SaveWithoutCrop_Click(object sender, RoutedEventArgs e)
         {
-            foreach (CCheckBox cb in checkBoxes)
-                if (cb.IsChecked.Value)
-                    ImageOperations.SaveWithoutCrop(loadedImageFilename, cb.Dimension);
+            if (loadedImage == null) return;
+            try
+            {
+                List<Task> tasks = new List<Task>();
+                foreach (int dimension in selectedDimensions)
+                {
+                    tasks.Add(ImageOperations.SaveWithoutCropAsync(loadedImageFilename, dimension));
+                }
+                await Task.WhenAll(tasks);
 
-            Process.Start(Path.GetFileNameWithoutExtension(loadedImageFilename));
+                Process.Start(Path.GetFileNameWithoutExtension(loadedImageFilename));
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show($"Failed to save icons: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+            }
         }
 
-        private void btn_CropAndSave_Click(object sender, RoutedEventArgs e)
+        private async void btn_CropAndSave_Click(object sender, RoutedEventArgs e)
         {
             if (rect != null && pictureGrid.Children.Contains(rect))
             {
-                foreach (var cb in checkBoxes)
+                try
                 {
-                    if (cb.IsChecked.Value)
+                    string folderName = Path.GetFileNameWithoutExtension(loadedImageFilename);
+                    Directory.CreateDirectory(folderName);
+
+                    // We create a clone for the background thread to work on safely
+                    MagickGeometry geometry = GetCropGeometry(rect, scale, pictureBox);
+
+                    await Task.Run(async () =>
                     {
-                        ImageOperations.CropAndSave(loadedImage, loadedImageFilename, cb.Dimension, rect, scale, pictureBox);
-                    }
+                        using (MagickImage cropped = new MagickImage(loadedImage))
+                        {
+                            cropped.Crop(geometry);
+                            cropped.RePage();
+
+                            List<Task> tasks = new List<Task>();
+                            foreach (int dimension in selectedDimensions)
+                            {
+                                string outputPath = Path.Combine(folderName, $"CroppedIcon_{dimension}.ico");
+                                tasks.Add(ImageOperations.ResizeAndSaveAsync(cropped, dimension, outputPath));
+                            }
+                            await Task.WhenAll(tasks);
+                        }
+                    });
+
+                    Process.Start(folderName);
                 }
-                Process.Start(Path.GetFileNameWithoutExtension(loadedImageFilename));
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Failed to crop and save icons: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                }
             }
             else
             {
@@ -138,45 +196,64 @@ namespace IconConverter
             }
         }
 
-        private void btn_MergeIntoBMP_Click(object sender, RoutedEventArgs e)
+        private MagickGeometry GetCropGeometry(System.Windows.Shapes.Rectangle rect, double scale, System.Windows.Controls.Image pictureBox)
+        {
+            int width = (int)(rect.Width / scale);
+            int height = (int)(rect.Height / scale);
+
+            int left = 0;
+            int top = 0;
+
+            if (rect.VerticalAlignment == VerticalAlignment.Top)
+            {
+                top = (int)(rect.Margin.Top / scale);
+            }
+            else // Bottom
+            {
+                top = (int)((pictureBox.Height - (rect.Margin.Bottom + rect.Height)) / scale);
+            }
+
+            if (rect.HorizontalAlignment == HorizontalAlignment.Left)
+            {
+                left = (int)(rect.Margin.Left / scale);
+            }
+            else // Right
+            {
+                left = (int)((pictureBox.Width - (rect.Margin.Right + rect.Width)) / scale);
+            }
+
+            return new MagickGeometry(left, top, width, height);
+        }
+
+        private async void btn_MergeIntoBMP_Click(object sender, RoutedEventArgs e)
         {
             string[] selectedFiles = selectedFilesOnDialog();
             if (selectedFiles != null)
             {
-                IconEx.IconEx icon = new IconEx.IconEx();
-                foreach (string fileName in selectedFiles)
-                {
-                    icon.iconCollection.Add(ImageOperations.GetIconBMP(fileName));
-                }
                 SaveFileDialog sfd = new SaveFileDialog();
                 sfd.AddExtension = true;
                 sfd.InitialDirectory = Directory.GetCurrentDirectory();
                 sfd.DefaultExt = ".ico";
                 sfd.Filter = "Icon |*.ico";
 
-                if (sfd.ShowDialog().Value)
-                    icon.Save(sfd.FileName);
+                if (sfd.ShowDialog().Value == true)
+                {
+                    try
+                    {
+                        await ImageOperations.MergeIconsAsync(selectedFiles, sfd.FileName);
+                    }
+                    catch (Exception ex)
+                    {
+                        MessageBox.Show($"Failed to merge icons: {ex.Message}", "Error", MessageBoxButton.OK, MessageBoxImage.Error);
+                    }
+                }
             }
         }
 
         private void btn_MergeIntoPNG_Click(object sender, RoutedEventArgs e)
         {
-            string[] selectedFiles = selectedFilesOnDialog();
-            if (selectedFiles != null)
-            {
-                IconFileWriter icon = new IconFileWriter();
-
-                foreach (string fileName in selectedFiles)
-                {
-                    icon.Images.Add(ImageOperations.GetIconPNG(fileName));
-                }
-                SaveFileDialog sfd = new SaveFileDialog();
-                sfd.AddExtension = true;
-                sfd.DefaultExt = ".ico";
-                sfd.Filter = "Icon |*.ico";
-                if (sfd.ShowDialog().Value)
-                    icon.Save(sfd.FileName);
-            }
+            // Same behavior as above, as Magick.NET handles formats automatically
+            btn_MergeIntoBMP_Click(sender, e);
         }
 
         #endregion
